@@ -11,14 +11,23 @@ export type LoanStatus = "pending" | "approved" | "rejected" | "paid";
 
 export interface Loan {
   id: number;
-  memberId: number;
+  memberId: string; // UUID from profiles
   memberName: string;
   amount: number;
   term: number; // months
-  interestRate: number; // percentage (flat per month or year? usually flat in KSP context based on LoanCalculator)
+  interestRate: number; // percentage
   startDate: string;
   status: LoanStatus;
   monthlyPayment: number;
   totalPayment: number;
   remainingAmount: number;
+}
+
+export interface Profile {
+  id: string; // UUID
+  memberId: string; // Custom ID like KSP-2024-001
+  fullName: string;
+  phone: string;
+  address: string;
+  status: "active" | "inactive";
 }

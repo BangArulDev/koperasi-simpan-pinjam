@@ -9,20 +9,25 @@ import AuthModal from "./AuthModal";
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
-  const { user, logout } = useAuth();
+  const { user, profile, logout } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const pathname = usePathname();
 
   if (pathname?.startsWith("/admin")) {
-    return null;
+    return null; // Admin pages have their own sidebar usually, or maybe we want this navbar too?
+    // Based on previous code, admin pages likely have their own layout or sidebar.
+    // If admin pages effectively replace this navbar, we keep this.
   }
 
   const openAuthModal = (mode: "login" | "register") => {
     setAuthMode(mode);
     setIsAuthModalOpen(true);
-    setIsOpen(false); // Close mobile menu if open
+    setIsOpen(false);
   };
+
+  const dashboardLink =
+    profile?.role === "admin" ? "/admin/dashboard" : "/dashboard";
 
   return (
     <>
@@ -47,23 +52,27 @@ export default function Navbar() {
                 // Logged In Menu
                 <>
                   <Link
-                    href="/dashboard"
+                    href={dashboardLink}
                     className="text-gray-600 hover:text-blue-700 font-medium transition"
                   >
-                    Dashboard
+                    Dashboard {profile?.role === "admin" ? "(Admin)" : ""}
                   </Link>
-                  <Link
-                    href="/dashboard/mutasi"
-                    className="text-gray-600 hover:text-blue-700 font-medium transition"
-                  >
-                    Mutasi
-                  </Link>
-                  <Link
-                    href="/dashboard/pengaturan"
-                    className="text-gray-600 hover:text-blue-700 font-medium transition"
-                  >
-                    Pengaturan
-                  </Link>
+                  {profile?.role !== "admin" && (
+                    <>
+                      <Link
+                        href="/dashboard/mutasi"
+                        className="text-gray-600 hover:text-blue-700 font-medium transition"
+                      >
+                        Mutasi
+                      </Link>
+                      <Link
+                        href="/dashboard/pengaturan"
+                        className="text-gray-600 hover:text-blue-700 font-medium transition"
+                      >
+                        Pengaturan
+                      </Link>
+                    </>
+                  )}
                   <button
                     onClick={logout}
                     className="text-red-600 hover:text-red-800 font-medium transition flex items-center gap-1"
@@ -132,26 +141,30 @@ export default function Navbar() {
             {user ? (
               <>
                 <Link
-                  href="/dashboard"
+                  href={dashboardLink}
                   className="block py-2 px-4 text-sm hover:bg-gray-100"
                   onClick={() => setIsOpen(false)}
                 >
-                  Dashboard
+                  Dashboard {profile?.role === "admin" ? "(Admin)" : ""}
                 </Link>
-                <Link
-                  href="/dashboard/mutasi"
-                  className="block py-2 px-4 text-sm hover:bg-gray-100"
-                  onClick={() => setIsOpen(false)}
-                >
-                  Mutasi
-                </Link>
-                <Link
-                  href="/dashboard/pengaturan"
-                  className="block py-2 px-4 text-sm hover:bg-gray-100"
-                  onClick={() => setIsOpen(false)}
-                >
-                  Pengaturan
-                </Link>
+                {profile?.role !== "admin" && (
+                  <>
+                    <Link
+                      href="/dashboard/mutasi"
+                      className="block py-2 px-4 text-sm hover:bg-gray-100"
+                      onClick={() => setIsOpen(false)}
+                    >
+                      Mutasi
+                    </Link>
+                    <Link
+                      href="/dashboard/pengaturan"
+                      className="block py-2 px-4 text-sm hover:bg-gray-100"
+                      onClick={() => setIsOpen(false)}
+                    >
+                      Pengaturan
+                    </Link>
+                  </>
+                )}
                 <button
                   onClick={() => {
                     logout();

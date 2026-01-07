@@ -4,16 +4,25 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../context/AuthContext";
 import { FaUserCog, FaSave, FaLock, FaUser } from "react-icons/fa";
+import { supabase } from "@/lib/supabase";
 
 export default function PengaturanPage() {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, profile, isAuthenticated, isLoading, refreshProfile } =
+    useAuth();
   const router = useRouter();
 
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    phone: "081234567890", // Mock data
-    address: "Jl. Merdeka No. 45, Grobogan", // Mock data
+    phone: "",
+    address: "",
+  });
+
+  const [isSaving, setIsSaving] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
   });
 
   useEffect(() => {
@@ -21,14 +30,15 @@ export default function PengaturanPage() {
 
     if (!isAuthenticated) {
       router.push("/");
-    } else if (user) {
-      setFormData((prev) => ({
-        ...prev,
-        name: user.name,
-        email: user.email,
-      }));
+    } else if (profile) {
+      setFormData({
+        name: profile.full_name || "",
+        email: user?.email || "",
+        phone: profile.phone || "",
+        address: profile.address || "",
+      });
     }
-  }, [isAuthenticated, isLoading, router, user]);
+  }, [isAuthenticated, isLoading, router, user, profile]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -38,6 +48,35 @@ export default function PengaturanPage() {
       ...prev,
       [name]: value,
     }));
+  };
+
+  const handleSaveProfile = async () => {
+    setIsSaving(true);
+    try {
+      if (!user) return;
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          full_name: formData.name,
+          phone: formData.phone,
+          address: formData.address,
+        })
+        .eq("id", user.id);
+
+      if (error) throw error;
+
+      if (refreshProfile) {
+        await refreshProfile();
+      }
+
+      alert("Profil berhasil diperbarui!");
+    } catch (error: any) {
+      console.error("Error updating profile:", error);
+      alert("Gagal memperbarui profil: " + error.message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (isLoading || !user) {
@@ -70,7 +109,13 @@ export default function PengaturanPage() {
               </h3>
             </div>
             <div className="p-6">
-              <form className="space-y-4">
+              <form
+                className="space-y-4"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSaveProfile();
+                }}
+              >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -92,7 +137,6 @@ export default function PengaturanPage() {
                       type="email"
                       name="email"
                       value={formData.email}
-                      onChange={handleChange}
                       readOnly
                       className="w-full border border-gray-300 rounded-lg px-4 py-2 bg-gray-50 text-gray-500 cursor-not-allowed"
                     />
@@ -106,6 +150,7 @@ export default function PengaturanPage() {
                       name="phone"
                       value={formData.phone}
                       onChange={handleChange}
+                      placeholder="08xxxxxxxxxx"
                       className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
@@ -118,30 +163,42 @@ export default function PengaturanPage() {
                       value={formData.address}
                       onChange={handleChange}
                       rows={3}
+                      placeholder="Masukkan alamat lengkap..."
                       className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
                 </div>
                 <div className="flex justify-end pt-4">
                   <button
-                    type="button"
-                    className="bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 shadow-sm flex items-center gap-2"
+                    type="submit"
+                    disabled={isSaving}
+                    className="bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 shadow-sm flex items-center gap-2 disabled:opacity-70"
                   >
-                    <FaSave /> Simpan Perubahan
+                    {isSaving ? (
+                      "Menyimpan..."
+                    ) : (
+                      <>
+                        <FaSave /> Simpan Perubahan
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
             </div>
           </div>
 
-          {/* Security Section */}
+          {/* Security Section (UI Only for MVP/User Request scope) */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
               <FaLock className="text-gray-400" />
               <h3 className="text-lg font-bold text-gray-900">Keamanan</h3>
             </div>
             <div className="p-6">
-              <form className="space-y-4">
+              <div className="p-4 bg-yellow-50 text-yellow-800 rounded-md text-sm mb-4">
+                Fitur ubah password saat ini dinonaktifkan sementara. Silakan
+                hubungi admin jika lupa password.
+              </div>
+              <form className="space-y-4 opacity-50 pointer-events-none">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -149,7 +206,8 @@ export default function PengaturanPage() {
                     </label>
                     <input
                       type="password"
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2"
+                      disabled
                     />
                   </div>
                   <div>
@@ -158,7 +216,8 @@ export default function PengaturanPage() {
                     </label>
                     <input
                       type="password"
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2"
+                      disabled
                     />
                   </div>
                   <div>
@@ -167,14 +226,16 @@ export default function PengaturanPage() {
                     </label>
                     <input
                       type="password"
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2"
+                      disabled
                     />
                   </div>
                 </div>
                 <div className="flex justify-end pt-4">
                   <button
                     type="button"
-                    className="bg-white text-gray-700 border border-gray-300 px-6 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 shadow-sm flex items-center gap-2"
+                    className="bg-white text-gray-700 border border-gray-300 px-6 py-2 rounded-lg text-sm font-medium shadow-sm flex items-center gap-2 cursor-not-allowed"
+                    disabled
                   >
                     Ubah Password
                   </button>

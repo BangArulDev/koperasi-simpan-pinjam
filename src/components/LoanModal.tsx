@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Loan } from "@/types";
+import { Loan, Profile } from "@/types";
 import { FaTimes, FaCalculator, FaSave } from "react-icons/fa";
 
 interface LoanModalProps {
@@ -9,24 +9,17 @@ interface LoanModalProps {
   onClose: () => void;
   onSubmit: (loanData: Omit<Loan, "id" | "status" | "remainingAmount">) => void;
   initialData?: Loan | null;
+  members: Profile[]; // Pass real members
 }
-
-// Mock members for selection
-const MOCK_MEMBERS = [
-  { id: 1, name: "Budi Santoso", memberId: "KSP-2022-0012" },
-  { id: 2, name: "Siti Aminah", memberId: "KSP-2023-0045" },
-  { id: 3, name: "Rudi Hartono", memberId: "KSP-2023-0089" },
-  { id: 4, name: "Dewi Sartika", memberId: "KSP-2021-0023" },
-  { id: 5, name: "Ahmad Dahlan", memberId: "KSP-2021-0005" },
-];
 
 export default function LoanModal({
   isOpen,
   onClose,
   onSubmit,
   initialData,
+  members,
 }: LoanModalProps) {
-  const [memberId, setMemberId] = useState<number | "">("");
+  const [memberId, setMemberId] = useState<string>("");
   const [amount, setAmount] = useState<number>(5000000);
   const [term, setTerm] = useState<number>(12);
   const [interestRate, setInterestRate] = useState<number>(1.5); // 1.5% flat/month
@@ -65,20 +58,20 @@ export default function LoanModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (memberId === "" || memberId === 0) {
+    if (memberId === "") {
       alert("Silakan pilih anggota");
       return;
     }
 
-    const selectedMember = MOCK_MEMBERS.find((m) => m.id === memberId);
+    const selectedMember = members.find((m) => m.id === memberId);
     if (!selectedMember) {
       alert("Data anggota tidak ditemukan");
       return;
     }
 
     onSubmit({
-      memberId: Number(memberId),
-      memberName: selectedMember.name,
+      memberId: memberId,
+      memberName: selectedMember.fullName,
       amount,
       term,
       interestRate,
@@ -142,16 +135,13 @@ export default function LoanModal({
                   required
                   className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2"
                   value={memberId}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setMemberId(val === "" ? "" : Number(val));
-                  }}
+                  onChange={(e) => setMemberId(e.target.value)}
                   disabled={!!initialData}
                 >
                   <option value="">Pilih Anggota</option>
-                  {MOCK_MEMBERS.map((m) => (
+                  {members.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name} - {m.memberId}
+                      {m.fullName} - {m.memberId}
                     </option>
                   ))}
                 </select>

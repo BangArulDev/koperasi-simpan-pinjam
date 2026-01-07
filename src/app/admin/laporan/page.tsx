@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   FaMoneyBillWave,
   FaUsers,
@@ -12,71 +12,14 @@ import {
 } from "react-icons/fa";
 import MutationTable from "@/components/MutationTable";
 import { Transaction } from "@/types";
-
-// Mock Data for specific report view (if needed different from MutationTable default)
-// Mock Data for specific report view (if needed different from MutationTable default)
-const REPORT_TRANSACTIONS: Transaction[] = [
-  {
-    id: "TRX-101",
-    date: "07 Jan 2026",
-    description: "Setoran Simpanan Wajib - Budi Santoso",
-    type: "simpanan",
-    amount: 50000,
-    status: "berhasil",
-  },
-  {
-    id: "TRX-102",
-    date: "06 Jan 2026",
-    description: "Pembayaran Pinjaman - Siti Aminah",
-    type: "pembayaran",
-    amount: 363333,
-    status: "berhasil",
-  },
-  {
-    id: "TRX-103",
-    date: "05 Jan 2026",
-    description: "Pencairan Pinjaman - Rudi Hartono",
-    type: "pinjaman",
-    amount: -10000000,
-    status: "berhasil",
-  },
-  {
-    id: "TRX-104",
-    date: "04 Jan 2026",
-    description: "Bagi Hasil SHU 2025",
-    type: "simpanan",
-    amount: 1500000,
-    status: "berhasil",
-  },
-  {
-    id: "TRX-105",
-    date: "02 Jan 2026",
-    description: "Biaya Administrasi Bulanan",
-    type: "penarikan",
-    amount: -250000,
-    status: "berhasil",
-  },
-  {
-    id: "TRX-106",
-    date: "15 Feb 2026",
-    description: "Setoran Simpanan Wajib - Ani",
-    type: "simpanan",
-    amount: 50000,
-    status: "berhasil",
-  },
-  {
-    id: "TRX-107",
-    date: "10 Feb 2026",
-    description: "Pinjaman Mikro - Joko",
-    type: "pinjaman",
-    amount: -2000000,
-    status: "pending",
-  },
-];
+import { supabase } from "@/lib/supabase";
 
 export default function AdminLaporanPage() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [totalMembers, setTotalMembers] = useState(0);
 
   const months = [
     "Januari",
@@ -98,52 +41,83 @@ export default function AdminLaporanPage() {
     (_, i) => new Date().getFullYear() - i + 1
   );
 
-  // Helper to parse "DD Mon YYYY"
-  const parseDate = (dateStr: string) => {
-    const parts = dateStr.split(" ");
-    const day = parseInt(parts[0]);
-    const monthStr = parts[1];
-    const year = parseInt(parts[2]);
+  useEffect(() => {
+    fetchTransactions();
+    fetchTotalMembers();
+  }, [selectedMonth, selectedYear]);
 
-    // Simple mapping for Indonesian months to index
-    const monthMap: { [key: string]: number } = {
-      Jan: 0,
-      Feb: 1,
-      Mar: 2,
-      Apr: 3,
-      Mei: 4,
-      Jun: 5,
-      Jul: 6,
-      Agt: 7,
-      Sep: 8,
-      Okt: 9,
-      Nov: 10,
-      Des: 11,
-    };
+  const fetchTransactions = async () => {
+    setIsLoading(true);
+    try {
+      // Calculate start and end date of the selected month
+      const startDate = new Date(selectedYear, selectedMonth, 1).toISOString();
+      const endDate = new Date(
+        selectedYear,
+        selectedMonth + 1,
+        0
+      ).toISOString();
 
-    return new Date(year, monthMap[monthStr], day);
+      const { data, error } = await supabase
+        .from("transactions")
+        .select(
+          `
+          *,
+          profiles:member_id (full_name)
+        `
+        )
+        .gte("date", startDate)
+        .lte("date", endDate)
+        .order("date", { ascending: false });
+
+      if (error) throw error;
+
+      const formattedData: Transaction[] = (data || []).map((t: any) => ({
+        id: t.id,
+        date: new Date(t.date).toLocaleDateString("id-ID", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        }),
+        description: t.description,
+        type: t.type,
+        amount: Number(t.amount),
+        status: t.status,
+      }));
+
+      setTransactions(formattedData);
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Filter Transactions
-  const filteredTransactions = REPORT_TRANSACTIONS.filter((trx) => {
-    const trxDate = parseDate(trx.date);
-    return (
-      trxDate.getMonth() === selectedMonth &&
-      trxDate.getFullYear() === selectedYear
-    );
-  });
+  const fetchTotalMembers = async () => {
+    try {
+      const { count, error } = await supabase
+        .from("profiles")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "active");
 
-  // Calculate Dynamic Stats
-  const totalSimpanan = filteredTransactions
+      if (!error && count !== null) {
+        setTotalMembers(count);
+      }
+    } catch (error) {
+      console.error("Error fetching members count:", error);
+    }
+  };
+
+  // Calculate Dynamic Stats from fetched data
+  const totalSimpanan = transactions
     .filter((t) => t.type === "simpanan")
     .reduce((acc, curr) => acc + curr.amount, 0);
 
-  const totalPinjaman = filteredTransactions
+  const totalPinjaman = transactions
     .filter((t) => t.type === "pinjaman")
     .reduce((acc, curr) => acc + Math.abs(curr.amount), 0); // Amount is negative in TRX
 
-  const totalMembersActive = 120 + filteredTransactions.length; // Mock variation
-  const totalAssets = 150000000 + totalSimpanan - totalPinjaman; // Mock calculation
+  // Asset calculation is simplified for now
+  const totalAssets = totalSimpanan - totalPinjaman;
 
   const handleDownloadPDF = () => {
     alert(
@@ -224,7 +198,7 @@ export default function AdminLaporanPage() {
           value={formatter.format(totalAssets)}
           icon={<FaChartLine size={24} />}
           color="bg-purple-100 text-purple-600"
-          trend="+12%"
+          trend="+-"
           trendUp={true}
         />
         <StatsCard
@@ -245,10 +219,10 @@ export default function AdminLaporanPage() {
         />
         <StatsCard
           title="Anggota Aktif"
-          value={totalMembersActive.toString()}
+          value={totalMembers.toString()}
           icon={<FaUsers size={24} />}
           color="bg-green-100 text-green-600"
-          trend="+-"
+          trend="Total"
           trendUp={true}
         />
       </div>
@@ -260,8 +234,12 @@ export default function AdminLaporanPage() {
             Mutasi Transaksi - {months[selectedMonth]} {selectedYear}
           </h2>
         </div>
-        {filteredTransactions.length > 0 ? (
-          <MutationTable data={filteredTransactions} limit={10} />
+        {isLoading ? (
+          <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+            Memuat data...
+          </div>
+        ) : transactions.length > 0 ? (
+          <MutationTable data={transactions} limit={10} />
         ) : (
           <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
             Tidak ada transaksi pada periode ini.

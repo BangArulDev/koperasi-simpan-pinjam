@@ -1,22 +1,60 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../context/AuthContext";
 import MutationTable from "../../../components/MutationTable";
 import { FaFileInvoiceDollar, FaFilter } from "react-icons/fa";
+import { supabase } from "@/lib/supabase";
+import { Transaction } from "@/types";
 
 export default function MutasiPage() {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (!authLoading && !isAuthenticated) {
       router.push("/");
+    } else if (user) {
+      fetchTransactions();
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, authLoading, router, user]);
 
-  if (isLoading || !user) {
+  const fetchTransactions = async () => {
+    try {
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("member_id", user.id)
+        .order("date", { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        setTransactions(
+          data.map((t: any) => ({
+            id: t.id,
+            date: new Date(t.date).toLocaleDateString("id-ID"),
+            description: t.description,
+            type: t.type,
+            amount: Number(t.amount),
+            status: t.status,
+          }))
+        );
+      }
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (authLoading || (!user && isLoading)) {
+    // Wait for auth or initial data load logic
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -42,7 +80,15 @@ export default function MutasiPage() {
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <MutationTable />
+          {isLoading ? (
+            <div className="p-6 text-center text-gray-500">Memuat data...</div>
+          ) : transactions.length > 0 ? (
+            <MutationTable data={transactions} />
+          ) : (
+            <div className="p-6 text-center text-gray-500">
+              Belum ada transaksi.
+            </div>
+          )}
         </div>
       </div>
     </div>

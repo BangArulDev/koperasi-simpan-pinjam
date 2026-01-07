@@ -17,7 +17,7 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, logout, isAuthenticated, isLoading } = useAuth();
+  const { user, profile, logout, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -25,11 +25,11 @@ export default function AdminLayout({
     if (!isLoading) {
       if (!isAuthenticated) {
         router.push("/");
-      } else if (user && user.role !== "admin") {
+      } else if (profile && profile.role !== "admin") {
         router.push("/dashboard");
       }
     }
-  }, [isAuthenticated, isLoading, router, user]);
+  }, [isAuthenticated, isLoading, router, user, profile]);
 
   const menuItems = [
     { name: "Dashboard", icon: FaTachometerAlt, href: "/admin/dashboard" },
@@ -58,8 +58,8 @@ export default function AdminLayout({
     );
   }
 
-  if (!user || user.role !== "admin") {
-    return null;
+  if (!user || (profile && profile.role !== "admin")) {
+    return null; // Or a loading spinner, or let the router push handle it
   }
 
   return (

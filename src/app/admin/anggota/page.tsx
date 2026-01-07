@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   FaSearch,
   FaUserCheck,
@@ -8,151 +8,141 @@ import {
   FaEdit,
   FaTrash,
 } from "react-icons/fa";
-
-// Mock Data
-interface Member {
-  id: number;
-  name: string;
-  email: string;
-  memberId: string;
-  joinDate: string;
-  status: string;
-  phone: string;
-}
-
-const MOCK_MEMBERS: Member[] = [
-  {
-    id: 1,
-    name: "Budi Santoso",
-    email: "budi@example.com",
-    memberId: "KSP-2022-0012",
-    joinDate: "2022-01-15",
-    status: "active",
-    phone: "081234567890",
-  },
-  {
-    id: 2,
-    name: "Siti Aminah",
-    email: "siti.aminah@example.com",
-    memberId: "-",
-    joinDate: "2024-01-07",
-    status: "pending",
-    phone: "081298765432",
-  },
-  {
-    id: 3,
-    name: "Rudi Hartono",
-    email: "rudi.h@example.com",
-    memberId: "-",
-    joinDate: "2024-01-07",
-    status: "pending",
-    phone: "085678901234",
-  },
-  {
-    id: 4,
-    name: "Dewi Lestari",
-    email: "dewi@example.com",
-    memberId: "KSP-2023-0550",
-    joinDate: "2023-05-20",
-    status: "active",
-    phone: "081345678901",
-  },
-  {
-    id: 5,
-    name: "Ahmad Dahlan",
-    email: "ahmad@example.com",
-    memberId: "KSP-2021-0005",
-    joinDate: "2021-03-10",
-    status: "inactive",
-    phone: "081987654321",
-  },
-];
+import { supabase } from "@/lib/supabase";
+import { Profile } from "@/types";
 
 export default function AdminAnggotaPage() {
   const [filterStatus, setFilterStatus] = useState<"all" | "pending">("all");
   const [search, setSearch] = useState("");
-  const [members, setMembers] = useState<Member[]>(MOCK_MEMBERS);
+  const [members, setMembers] = useState<Profile[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingMember, setEditingMember] = useState<Profile | null>(null);
   const [formData, setFormData] = useState({
-    name: "",
-    email: "",
+    fullName: "",
     phone: "",
+    address: "",
   });
+
+  useEffect(() => {
+    fetchMembers();
+  }, []);
+
+  const fetchMembers = async () => {
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      // Map snake_case to camelCase (Profile type uses camelCase)
+      const mappedMembers: Profile[] = (data || []).map((m: any) => ({
+        id: m.id,
+        memberId: m.member_id,
+        fullName: m.full_name,
+        phone: m.phone,
+        address: m.address,
+        status: m.status,
+      }));
+
+      setMembers(mappedMembers);
+    } catch (error) {
+      console.error("Error fetching members:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const filteredMembers = members.filter((member) => {
     const matchesSearch =
-      member.name.toLowerCase().includes(search.toLowerCase()) ||
-      member.email.toLowerCase().includes(search.toLowerCase());
+      member.fullName?.toLowerCase().includes(search.toLowerCase()) ||
+      member.memberId?.toLowerCase().includes(search.toLowerCase());
     const matchesStatus =
       filterStatus === "all" ? true : member.status === "pending";
     return matchesSearch && matchesStatus;
   });
 
-  const handleApprove = (id: number) => {
-    setMembers((prev) =>
-      prev.map((m) =>
-        m.id === id
-          ? { ...m, status: "active", memberId: `KSP-2024-${1000 + id}` }
-          : m
-      )
-    );
-  };
+  const handleApprove = async (id: string, currentMemberId: string) => {
+    // Generate member ID if not exists or placeholder
+    // Assuming member_id is already set by trigger or we can set it here if needed.
+    // The trigger 'handle_new_user' sets a basic member_id.
+    // We update status to active.
 
-  const handleDelete = (id: number) => {
-    if (
-      confirm(
-        "Apakah Anda yakin ingin menghapus anggota ini? Tindakan ini tidak dapat dibatalkan."
-      )
-    ) {
-      setMembers((prev) => prev.filter((m) => m.id !== id));
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ status: "active" })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      alert("Anggota berhasil diverifikasi!");
+      fetchMembers();
+    } catch (error) {
+      console.error("Error approving member:", error);
+      alert("Gagal memverifikasi anggota.");
     }
   };
 
-  const handleEditClick = (member: Member) => {
-    setEditingId(member.id);
+  const handleDelete = async (id: string) => {
+    if (
+      confirm(
+        "Apakah Anda yakin ingin menghapus anggota ini? Tindakan ini tidak dapat dibatalkan (Data Auth User mungkin masih tersisa)."
+      )
+    ) {
+      try {
+        const { error } = await supabase.from("profiles").delete().eq("id", id);
+
+        if (error) throw error;
+
+        setMembers((prev) => prev.filter((m) => m.id !== id));
+        alert("Data profil anggota berhasil dihapus!");
+      } catch (error) {
+        console.error("Error deleting member:", error);
+        alert("Gagal menghapus anggota.");
+      }
+    }
+  };
+
+  const handleEditClick = (member: Profile) => {
+    setEditingMember(member);
     setFormData({
-      name: member.name,
-      email: member.email,
-      phone: member.phone,
+      fullName: member.fullName,
+      phone: member.phone || "",
+      address: member.address || "",
     });
     setIsModalOpen(true);
   };
 
-  const handleCreateClick = () => {
-    setEditingId(null);
-    setFormData({ name: "", email: "", phone: "" });
-    setIsModalOpen(true);
-  };
-
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (editingId) {
-      // Update existing member
-      setMembers((prev) =>
-        prev.map((m) => (m.id === editingId ? { ...m, ...formData } : m))
-      );
-      alert("Data anggota berhasil diperbarui!");
-    } else {
-      // Create new member
-      const id =
-        members.length > 0 ? Math.max(...members.map((m) => m.id)) + 1 : 1;
-      const newMemberObj: Member = {
-        id,
-        ...formData,
-        memberId: `KSP-2024-${1000 + id}`,
-        joinDate: new Date().toISOString().split("T")[0],
-        status: "active",
-      };
-      setMembers([newMemberObj, ...members]);
-      alert("Anggota berhasil ditambahkan!");
-    }
+    if (editingMember) {
+      try {
+        const { error } = await supabase
+          .from("profiles")
+          .update({
+            full_name: formData.fullName,
+            phone: formData.phone,
+            address: formData.address,
+          })
+          .eq("id", editingMember.id);
 
-    setIsModalOpen(false);
-    setFormData({ name: "", email: "", phone: "" });
-    setEditingId(null);
+        if (error) throw error;
+
+        alert("Data anggota berhasil diperbarui!");
+        fetchMembers();
+        setIsModalOpen(false);
+        setEditingMember(null);
+      } catch (error) {
+        console.error("Error updating member:", error);
+        alert("Gagal memperbarui data anggota.");
+      }
+    }
   };
 
   return (
@@ -166,14 +156,7 @@ export default function AdminAnggotaPage() {
             Total {members.length} anggota terdaftar
           </p>
         </div>
-        <div className="flex gap-3">
-          <button
-            onClick={handleCreateClick}
-            className="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 shadow-sm"
-          >
-            + Tambah Anggota
-          </button>
-        </div>
+        {/* 'Tambah Anggota' button removed as it requires Admin API for Auth creation */}
       </div>
 
       {/* Stats Row */}
@@ -183,7 +166,7 @@ export default function AdminAnggotaPage() {
             Total Anggota
           </div>
           <div className="text-2xl font-bold text-gray-900">
-            {members.length}
+            {isLoading ? "..." : members.length}
           </div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
@@ -191,7 +174,9 @@ export default function AdminAnggotaPage() {
             Anggota Aktif
           </div>
           <div className="text-2xl font-bold text-green-600">
-            {members.filter((m) => m.status === "active").length}
+            {isLoading
+              ? "..."
+              : members.filter((m) => m.status === "active").length}
           </div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
@@ -199,7 +184,9 @@ export default function AdminAnggotaPage() {
             Menunggu Verifikasi
           </div>
           <div className="text-2xl font-bold text-orange-500">
-            {members.filter((m) => m.status === "pending").length}
+            {isLoading
+              ? "..."
+              : members.filter((m) => m.status === "pending").length}
           </div>
         </div>
       </div>
@@ -232,7 +219,7 @@ export default function AdminAnggotaPage() {
           <div className="relative w-full sm:w-64">
             <input
               type="text"
-              placeholder="Cari nama atau email..."
+              placeholder="Cari nama atau ID..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -262,7 +249,7 @@ export default function AdminAnggotaPage() {
                   scope="col"
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                 >
-                  Tanggal Daftar
+                  Kontak
                 </th>
                 <th
                   scope="col"
@@ -279,105 +266,117 @@ export default function AdminAnggotaPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredMembers.map((member) => (
-                <tr key={member.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
-                        {member.name.charAt(0)}
-                      </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">
-                          {member.name}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {member.email}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-900 font-mono">
-                      {member.memberId}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {member.joinDate}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        member.status === "active"
-                          ? "bg-green-100 text-green-800"
-                          : member.status === "pending"
-                          ? "bg-yellow-100 text-yellow-800"
-                          : "bg-gray-100 text-gray-800"
-                      }`}
-                    >
-                      {member.status === "active"
-                        ? "Aktif"
-                        : member.status === "pending"
-                        ? "Menunggu"
-                        : "Non-Aktif"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    {member.status === "pending" ? (
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => handleApprove(member.id)}
-                          className="text-green-600 hover:text-green-900 bg-green-50 p-2 rounded hover:bg-green-100 transition"
-                          title="Setujui"
-                        >
-                          <FaUserCheck />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(member.id)} // Reject is effectively a delete from pending
-                          className="text-red-600 hover:text-red-900 bg-red-50 p-2 rounded hover:bg-red-100 transition"
-                          title="Tolak"
-                        >
-                          <FaUserTimes />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => handleEditClick(member)}
-                          className="text-blue-600 hover:text-blue-900 bg-blue-50 p-2 rounded hover:bg-blue-100 transition"
-                          title="Edit"
-                        >
-                          <FaEdit />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(member.id)}
-                          className="text-red-600 hover:text-red-900 bg-red-50 p-2 rounded hover:bg-red-100 transition"
-                          title="Hapus"
-                        >
-                          <FaTrash />
-                        </button>
-                      </div>
-                    )}
+              {isLoading ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-8 text-gray-500">
+                    Memuat data anggota...
                   </td>
                 </tr>
-              ))}
+              ) : filteredMembers.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-8 text-gray-500">
+                    Tidak ada data anggota ditemukan.
+                  </td>
+                </tr>
+              ) : (
+                filteredMembers.map((member) => (
+                  <tr key={member.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold uppercase">
+                          {member.fullName ? member.fullName.charAt(0) : "?"}
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">
+                            {member.fullName}
+                          </div>
+                          <div
+                            className="text-sm text-gray-500 truncate max-w-[150px]"
+                            title={member.address}
+                          >
+                            {member.address || "-"}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm text-gray-900 font-mono">
+                        {member.memberId}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {member.phone || "-"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          member.status === "active"
+                            ? "bg-green-100 text-green-800"
+                            : member.status === "pending"
+                            ? "bg-yellow-100 text-yellow-800"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        {member.status === "active"
+                          ? "Aktif"
+                          : member.status === "pending"
+                          ? "Menunggu"
+                          : "Non-Aktif"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      {member.status === "pending" ? (
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() =>
+                              handleApprove(member.id, member.memberId)
+                            }
+                            className="text-green-600 hover:text-green-900 bg-green-50 p-2 rounded hover:bg-green-100 transition"
+                            title="Setujui"
+                          >
+                            <FaUserCheck />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(member.id)}
+                            className="text-red-600 hover:text-red-900 bg-red-50 p-2 rounded hover:bg-red-100 transition"
+                            title="Tolak"
+                          >
+                            <FaUserTimes />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => handleEditClick(member)}
+                            className="text-blue-600 hover:text-blue-900 bg-blue-50 p-2 rounded hover:bg-blue-100 transition"
+                            title="Edit"
+                          >
+                            <FaEdit />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(member.id)}
+                            className="text-red-600 hover:text-red-900 bg-red-50 p-2 rounded hover:bg-red-100 transition"
+                            title="Hapus"
+                          >
+                            <FaTrash />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
-          {filteredMembers.length === 0 && (
-            <div className="text-center py-10 text-gray-500">
-              Tidak ada data anggota ditemukan.
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Add/Edit Member Modal */}
+      {/* Edit Member Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-gray-900">
-                {editingId ? "Edit Anggota" : "Tambah Anggota Baru"}
-              </h3>
+              <h3 className="text-lg font-bold text-gray-900">Edit Anggota</h3>
               <button
                 onClick={() => setIsModalOpen(false)}
                 className="text-gray-400 hover:text-gray-600"
@@ -394,23 +393,9 @@ export default function AdminAnggotaPage() {
                   <input
                     type="text"
                     required
-                    value={formData.name}
+                    value={formData.fullName}
                     onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={(e) =>
-                      setFormData({ ...formData, email: e.target.value })
+                      setFormData({ ...formData, fullName: e.target.value })
                     }
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
                   />
@@ -429,6 +414,20 @@ export default function AdminAnggotaPage() {
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Alamat
+                  </label>
+                  <textarea
+                    required
+                    value={formData.address}
+                    onChange={(e) =>
+                      setFormData({ ...formData, address: e.target.value })
+                    }
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+                    rows={3}
+                  />
+                </div>
                 <div className="pt-4 flex gap-3">
                   <button
                     type="button"
@@ -441,7 +440,7 @@ export default function AdminAnggotaPage() {
                     type="submit"
                     className="flex-1 px-4 py-2 bg-blue-700 text-white rounded-lg font-medium hover:bg-blue-800"
                   >
-                    {editingId ? "Simpan Perubahan" : "Simpan"}
+                    Simpan Perubahan
                   </button>
                 </div>
               </form>

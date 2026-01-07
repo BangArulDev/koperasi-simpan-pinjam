@@ -9,6 +9,7 @@ import {
   FaInfoCircle,
   FaPaperPlane,
 } from "react-icons/fa";
+import { supabase } from "@/lib/supabase";
 
 export default function AjukanPinjamanPage() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -17,6 +18,7 @@ export default function AjukanPinjamanPage() {
   const [amount, setAmount] = useState<number>(0);
   const [tenor, setTenor] = useState<number>(12);
   const [purpose, setPurpose] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Constants
   const INTEREST_RATE_PER_MONTH = 0.015; // 1.5%
@@ -38,7 +40,53 @@ export default function AjukanPinjamanPage() {
       style: "currency",
       currency: "IDR",
       maximumFractionDigits: 0,
-    }).format(val);
+    }).format(val || 0); // Handle NaN/undefined safely
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!amount || amount <= 0 || !tenor) {
+      alert("Mohon lengkapi jumlah pinjaman dan tenor.");
+      return;
+    }
+    if (amount > 25000000) {
+      alert("Maksimal pinjaman adalah Rp 25.000.000");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      const { error } = await supabase.from("loans").insert({
+        member_id: user.id,
+        amount: amount,
+        term: tenor,
+        interest_rate: 1.5,
+        status: "pending",
+        start_date: new Date().toISOString(), // Request date
+        monthly_payment: totalPerMonth,
+        total_payment: totalPayment,
+        remaining_amount: totalPayment,
+        // Note: Store purpose if we add a column for it, or in metadata if needed.
+        // For now schema might not have 'purpose', assuming standard loan.
+      });
+
+      if (error) throw error;
+
+      alert(
+        "Pengajuan pinjaman berhasil dikirim! Mohon tunggu konfirmasi admin."
+      );
+      router.push("/dashboard");
+    } catch (error: any) {
+      console.error("Error submitting loan:", error);
+      alert("Gagal mengajukan pinjaman: " + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (isLoading || !user) {
@@ -65,7 +113,7 @@ export default function AjukanPinjamanPage() {
           {/* Form Section */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden p-6">
-              <form className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Jumlah Pinjaman (Rp)
@@ -124,10 +172,17 @@ export default function AjukanPinjamanPage() {
 
                 <div className="pt-4">
                   <button
-                    type="button"
-                    className="w-full bg-blue-700 text-white py-3 rounded-xl font-bold text-lg hover:bg-blue-800 transition shadow-lg flex justify-center items-center gap-2"
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full bg-blue-700 text-white py-3 rounded-xl font-bold text-lg hover:bg-blue-800 transition shadow-lg flex justify-center items-center gap-2 disabled:opacity-50"
                   >
-                    <FaPaperPlane /> Kirim Pengajuan
+                    {isSubmitting ? (
+                      "Mengirim..."
+                    ) : (
+                      <>
+                        <FaPaperPlane /> Kirim Pengajuan
+                      </>
+                    )}
                   </button>
                 </div>
               </form>

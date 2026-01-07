@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -16,7 +17,7 @@ export default function AuthModal({
   onClose,
 }: AuthModalProps) {
   const [mode, setMode] = useState<"login" | "register">(initialMode);
-  const { login } = useAuth();
+  const { login, register, profile } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [show, setShow] = useState(false);
@@ -29,7 +30,6 @@ export default function AuthModal({
   useEffect(() => {
     if (isOpen) {
       setShouldRender(true);
-      // Small timeout to allow render before transitioning opacity
       setTimeout(() => setShow(true), 10);
       document.body.classList.add("modal-active");
       document.body.style.overflow = "hidden";
@@ -37,46 +37,93 @@ export default function AuthModal({
       setShow(false);
       document.body.classList.remove("modal-active");
       document.body.style.overflow = "auto";
-      // Wait for animation to finish before unmounting
       setTimeout(() => setShouldRender(false), 300);
     }
   }, [isOpen]);
 
-  /* State for login inputs */
-  const [loginIdentifier, setLoginIdentifier] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
+  /* State for inputs */
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
-  const handleLogin = (e: React.FormEvent) => {
+  // Register specific fields
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    setTimeout(() => {
-      // Mock Admin Login Logic
-      if (loginIdentifier === "admin" || loginIdentifier === "admin@ksp.com") {
-        login("Admin", "admin@ksp.com", "admin");
-        setIsLoading(false);
-        onClose();
-        router.push("/admin/dashboard");
+    try {
+      const { error } = await login(email, password);
+      if (error) throw error;
+
+      // Check role directly from Supabase to ensure immediate correct redirection
+      // Note: We can't rely on 'profile' from context immediately as it might not have updated yet
+      // So we fetch it here manually or rely on a helper.
+      // Ideally AuthContext should return the profile on login, but for now we fetch it.
+
+      // Get current user to fetch profile
+      // Note: login() uses supabase.auth.signInWithPassword which updates the session.
+      // We can get the user id from the session.
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", session.user.id)
+          .single();
+
+        if (profile?.role === "admin") {
+          router.push("/admin/dashboard");
+        } else {
+          router.push("/dashboard");
+        }
       } else {
-        // Normal User Login
-        login("Budi Santoso", "budi@example.com", "user");
-        setIsLoading(false);
-        onClose();
         router.push("/dashboard");
       }
-    }, 1000);
+
+      onClose();
+    } catch (error: any) {
+      alert("Login gagal: " + error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
-  const handleRegister = (e: React.FormEvent) => {
+
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert("Pendaftaran berhasil! Silakan login.");
-    setMode("login");
+    setIsLoading(true);
+
+    try {
+      const { error } = await register(
+        email,
+        password,
+        fullName,
+        phone,
+        address
+      );
+      if (error) throw error;
+
+      alert(
+        "Pendaftaran berhasil! Silakan cek email Anda untuk verifikasi (jika diaktifkan) atau langsung login."
+      );
+      setMode("login");
+    } catch (error: any) {
+      alert("Pendaftaran gagal: " + error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (!shouldRender) return null;
 
   return (
     <div
-      className={`fixed inset-0 z-100 flex items-center justify-center overflow-y-auto overflow-x-hidden p-4 sm:p-6 md:p-0 transition-opacity duration-300 ease-in-out ${
+      className={`fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto overflow-x-hidden p-4 sm:p-6 md:p-0 transition-opacity duration-300 ease-in-out ${
         show
           ? "opacity-100 pointer-events-auto"
           : "opacity-0 pointer-events-none"
@@ -103,7 +150,6 @@ export default function AuthModal({
             </button>
           </div>
 
-          {/* Title */}
           {/* Tabs */}
           <div className="flex border-b border-gray-200 mb-6">
             <button
@@ -147,13 +193,14 @@ export default function AuthModal({
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  Nomor Anggota / Email
+                  Email
                 </label>
                 <input
-                  value={loginIdentifier}
-                  onChange={(e) => setLoginIdentifier(e.target.value)}
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Contoh: KSP-2024-0012 atau admin"
+                  placeholder="nama@email.com"
                   required
                 />
               </div>
@@ -162,8 +209,9 @@ export default function AuthModal({
                   Password
                 </label>
                 <input
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="••••••••"
                   required
@@ -200,17 +248,45 @@ export default function AuthModal({
                 </label>
                 <input
                   type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
                   required
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  No. WhatsApp
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  No. Telepon / WhatsApp
                 </label>
                 <input
                   type="text"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Alamat Lengkap
+                </label>
+                <textarea
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
+                  rows={2}
                   required
                 />
               </div>
@@ -220,15 +296,18 @@ export default function AuthModal({
                 </label>
                 <input
                   type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
                   required
                 />
               </div>
               <button
                 type="submit"
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                disabled={isLoading}
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
               >
-                Daftar Anggota
+                {isLoading ? "Mendaftar..." : "Daftar Anggota"}
               </button>
               <div className="text-center mt-4">
                 <span className="text-sm text-gray-600">

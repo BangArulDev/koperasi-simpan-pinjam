@@ -1,63 +1,15 @@
 import { Transaction } from "../types";
 
-const MOCK_TRANSACTIONS: Transaction[] = [
-  {
-    id: "TRX-001",
-    date: "25 Sep 2024",
-    description: "Setoran Simpanan Wajib",
-    type: "simpanan",
-    amount: 50000,
-    status: "berhasil",
-  },
-  {
-    id: "TRX-002",
-    date: "20 Sep 2024",
-    description: "Pembayaran Angsuran #6",
-    type: "pinjaman",
-    amount: -625000,
-    status: "berhasil",
-  },
-  {
-    id: "TRX-003",
-    date: "10 Sep 2024",
-    description: "Penarikan Simpanan Sukarela",
-    type: "penarikan",
-    amount: -200000,
-    status: "berhasil",
-  },
-  {
-    id: "TRX-004",
-    date: "05 Sep 2024",
-    description: "Setoran Simpanan Sukarela",
-    type: "simpanan",
-    amount: 1000000,
-    status: "berhasil",
-  },
-  {
-    id: "TRX-005",
-    date: "01 Sep 2024",
-    description: "Pencairan Pinjaman Mikro",
-    type: "pinjaman",
-    amount: 5000000,
-    status: "berhasil",
-  },
-  {
-    id: "TRX-006",
-    date: "28 Agt 2024",
-    description: "Biaya Administrasi",
-    type: "pembayaran",
-    amount: -15000,
-    status: "berhasil",
-  },
-];
-
 interface MutationTableProps {
   limit?: number;
-  data?: Transaction[];
+  data: Transaction[];
 }
 
-export default function MutationTable({ limit, data }: MutationTableProps) {
-  const transactions = data || MOCK_TRANSACTIONS;
+export default function MutationTable({
+  limit,
+  data = [],
+}: MutationTableProps) {
+  const transactions = data;
   const shownTransactions = limit ? transactions.slice(0, limit) : transactions;
 
   const formatCurrency = (amount: number) => {

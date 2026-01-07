@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   FaPlus,
   FaSearch,
@@ -9,58 +9,83 @@ import {
   FaMoneyBillWave,
   FaTrash,
 } from "react-icons/fa";
-import { Loan, LoanStatus } from "@/types";
+import { Loan, LoanStatus, Profile } from "@/types";
 import LoanModal from "@/components/LoanModal";
-
-// Mock Data
-const MOCK_LOANS: Loan[] = [
-  {
-    id: 1,
-    memberId: 1,
-    memberName: "Budi Santoso",
-    amount: 5000000,
-    term: 12,
-    interestRate: 1.5,
-    startDate: "2024-01-15",
-    status: "approved",
-    monthlyPayment: 491666,
-    totalPayment: 5900000,
-    remainingAmount: 4500000,
-  },
-  {
-    id: 2,
-    memberId: 2,
-    memberName: "Siti Aminah",
-    amount: 2000000,
-    term: 6,
-    interestRate: 1.5,
-    startDate: "2024-02-01",
-    status: "pending",
-    monthlyPayment: 363333,
-    totalPayment: 2180000,
-    remainingAmount: 2180000,
-  },
-  {
-    id: 3,
-    memberId: 3,
-    memberName: "Rudi Hartono",
-    amount: 10000000,
-    term: 24,
-    interestRate: 1.2,
-    startDate: "2024-01-10",
-    status: "paid",
-    monthlyPayment: 536666,
-    totalPayment: 12880000,
-    remainingAmount: 0,
-  },
-];
+import { supabase } from "@/lib/supabase";
 
 export default function AdminPinjamanPage() {
-  const [loans, setLoans] = useState<Loan[]>(MOCK_LOANS);
+  const [loans, setLoans] = useState<Loan[]>([]);
+  const [members, setMembers] = useState<Profile[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<LoanStatus | "all">("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch Data from Supabase
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      // Fetch Loans
+      const { data: loansData, error: loansError } = await supabase
+        .from("loans")
+        .select(
+          `
+          *,
+          profiles:member_id (
+            full_name
+          )
+        `
+        )
+        .order("created_at", { ascending: false });
+
+      if (loansError) throw loansError;
+
+      const formattedLoans: Loan[] = (loansData || []).map((l: any) => ({
+        id: l.id,
+        memberId: l.member_id,
+        memberName: l.profiles?.full_name || "Unknown",
+        amount: Number(l.amount),
+        term: l.term,
+        interestRate: Number(l.interest_rate),
+        startDate: l.start_date,
+        status: l.status,
+        monthlyPayment: Number(l.monthly_payment),
+        totalPayment: Number(l.total_payment),
+        remainingAmount: Number(l.remaining_amount),
+      }));
+      setLoans(formattedLoans);
+
+      // Fetch Profiles (for modal)
+      const { data: profilesData, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, member_id, full_name, phone, address, status")
+        .eq("status", "active");
+
+      if (profilesError) throw profilesError;
+
+      const formattedProfiles: Profile[] = (profilesData || []).map(
+        (p: any) => ({
+          id: p.id,
+          memberId: p.member_id,
+          fullName: p.full_name,
+          phone: p.phone,
+          address: p.address,
+          status: p.status,
+        })
+      );
+      setMembers(formattedProfiles);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      alert("Gagal mengambil data dari database.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Filter Logic
   const filteredLoans = loans.filter((loan) => {
@@ -72,37 +97,76 @@ export default function AdminPinjamanPage() {
     return matchesSearch && matchesStatus;
   });
 
-  const handleAddLoan = (
+  const handleAddLoan = async (
     newLoanData: Omit<Loan, "id" | "status" | "remainingAmount">
   ) => {
-    const newId =
-      loans.length > 0 ? Math.max(...loans.map((l) => l.id)) + 1 : 1;
-    const newLoan: Loan = {
-      ...newLoanData,
-      id: newId,
-      status: "pending",
-      remainingAmount: newLoanData.totalPayment,
-    };
-    setLoans([newLoan, ...loans]);
-    setIsModalOpen(false);
+    try {
+      const { data, error } = await supabase
+        .from("loans")
+        .insert([
+          {
+            member_id: newLoanData.memberId,
+            amount: newLoanData.amount,
+            term: newLoanData.term,
+            interest_rate: newLoanData.interestRate,
+            start_date: newLoanData.startDate,
+            status: "pending",
+            monthly_payment: newLoanData.monthlyPayment,
+            total_payment: newLoanData.totalPayment,
+            remaining_amount: newLoanData.totalPayment,
+          },
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      alert("Pengajuan pinjaman berhasil disimpan!");
+      fetchData(); // Refresh list
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error("Error adding loan:", error);
+      alert("Gagal menambah pinjaman.");
+    }
   };
 
-  const handleUpdateStatus = (id: number, newStatus: LoanStatus) => {
-    setLoans(
-      loans.map((loan) =>
-        loan.id === id ? { ...loan, status: newStatus } : loan
-      )
-    );
+  const handleUpdateStatus = async (id: number, newStatus: LoanStatus) => {
+    try {
+      const { error } = await supabase
+        .from("loans")
+        .update({ status: newStatus })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      // Optimistic update
+      setLoans(
+        loans.map((loan) =>
+          loan.id === id ? { ...loan, status: newStatus } : loan
+        )
+      );
+    } catch (error) {
+      console.error("Error updating status:", error);
+      alert("Gagal memperbarui status pinjaman.");
+    }
   };
 
-  const handleDeleteLoan = (id: number) => {
+  const handleDeleteLoan = async (id: number) => {
     if (confirm("Apakah Anda yakin ingin menghapus data pinjaman ini?")) {
-      setLoans(loans.filter((loan) => loan.id !== id));
+      try {
+        const { error } = await supabase.from("loans").delete().eq("id", id);
+
+        if (error) throw error;
+
+        setLoans(loans.filter((loan) => loan.id !== id));
+      } catch (error) {
+        console.error("Error deleting loan:", error);
+        alert("Gagal menghapus pinjaman.");
+      }
     }
   };
 
   const openApproveModal = (loan: Loan) => {
-    // In a real app, you might show details before approving
     if (confirm(`Setujui pinjaman untuk ${loan.memberName}?`)) {
       handleUpdateStatus(loan.id, "approved");
     }
@@ -322,11 +386,13 @@ export default function AdminPinjamanPage() {
       </div>
 
       {/* Modal */}
+      {/* Loan Modal */}
       <LoanModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleAddLoan}
         initialData={selectedLoan}
+        members={members}
       />
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -15,24 +15,99 @@ import {
 } from "react-icons/fa";
 import Link from "next/link";
 import MutationTable from "../../components/MutationTable";
+import { supabase } from "@/lib/supabase";
+import { Transaction } from "@/types";
 
 export default function DashboardPage() {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, profile, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
 
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push("/");
-    }
-  }, [isAuthenticated, isLoading, router]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
 
-  if (isLoading || !user) {
+  // Dashboard Stats State
+  const [totalSimpanan, setTotalSimpanan] = useState(0);
+  const [activeLoan, setActiveLoan] = useState<any>(null); // Simplified for now
+
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push("/");
+    } else if (user) {
+      fetchDashboardData();
+    }
+  }, [isAuthenticated, authLoading, router, user]);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoadingData(true);
+      if (!user) return;
+
+      // 1. Fetch Transactions
+      const { data: trxData } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("member_id", user.id)
+        .order("date", { ascending: false })
+        .limit(5);
+
+      if (trxData) {
+        setTransactions(
+          trxData.map((t: any) => ({
+            id: t.id,
+            date: new Date(t.date).toLocaleDateString("id-ID"),
+            description: t.description,
+            type: t.type,
+            amount: Number(t.amount),
+            status: t.status,
+          }))
+        );
+      }
+
+      // 2. Fetch Savings (Simplified sum for now, effectively from transactions or a summary table if exists)
+      // Ideally we query the 'savings_accounts' table but let's assume we sum from transactions for MVP or query a view.
+      // Or better, query savings_accounts table directly if populated.
+      const { data: savingsData } = await supabase
+        .from("savings_accounts")
+        .select("balance")
+        .eq("member_id", user.id);
+
+      const currentSavings =
+        savingsData?.reduce((acc, curr) => acc + Number(curr.balance), 0) || 0;
+      setTotalSimpanan(currentSavings);
+
+      // 3. Fetch Active Loan
+      const { data: loanData } = await supabase
+        .from("loans")
+        .select("*")
+        .eq("member_id", user.id)
+        .eq("status", "approved")
+        .single();
+
+      if (loanData) {
+        setActiveLoan(loanData);
+      }
+    } catch (error) {
+      console.error("Error fetching dashboard data", error);
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  if (authLoading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     );
   }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
 
   return (
     <div className="min-h-screen bg-gray-100 pt-24 pb-10">
@@ -41,10 +116,13 @@ export default function DashboardPage() {
         <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              Halo, {user.name}
+              Halo, {profile?.full_name || user.email}
             </h1>
             <p className="text-gray-600 text-sm">
-              No. Anggota: KSP-2024-0012 | Aktif sejak 2022
+              No. Anggota: {profile?.member_id || "-"} |{" "}
+              {profile?.status === "active"
+                ? "Anggota Aktif"
+                : "Status: " + profile?.status}
             </p>
           </div>
           <div className="mt-4 sm:mt-0 flex gap-3">
@@ -73,19 +151,20 @@ export default function DashboardPage() {
             <p className="text-blue-100 text-sm font-medium mb-1">
               Total Simpanan Anda
             </p>
-            <h2 className="text-3xl font-bold mb-4">Rp 12.500.000</h2>
+            <h2 className="text-3xl font-bold mb-4">
+              {formatCurrency(totalSimpanan)}
+            </h2>
             <div className="space-y-2 text-sm text-blue-100 border-t border-blue-500 pt-3">
               <div className="flex justify-between">
                 <span>Simpanan Pokok</span>
-                <span className="font-semibold">Rp 500.000</span>
+                <span className="font-semibold">{formatCurrency(0)}</span>{" "}
+                {/* TODO: Break down savings types */}
               </div>
               <div className="flex justify-between">
                 <span>Simpanan Wajib</span>
-                <span className="font-semibold">Rp 2.000.000</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Simpanan Sukarela</span>
-                <span className="font-semibold">Rp 10.000.000</span>
+                <span className="font-semibold">
+                  {formatCurrency(totalSimpanan)}
+                </span>
               </div>
             </div>
           </div>
@@ -98,34 +177,60 @@ export default function DashboardPage() {
                   Pinjaman Aktif
                 </p>
                 <h2 className="text-2xl font-bold text-gray-900 mt-1">
-                  Rp 4.200.000
+                  {activeLoan
+                    ? formatCurrency(activeLoan.remaining_amount)
+                    : "Tidak ada"}
                 </h2>
-                <p className="text-xs text-red-500 mt-1 font-semibold flex items-center gap-1">
-                  <FaExclamationCircle /> Jatuh tempo: 25 Okt 2024
-                </p>
+                {activeLoan && (
+                  <p className="text-xs text-red-500 mt-1 font-semibold flex items-center gap-1">
+                    <FaExclamationCircle /> Jatuh tempo: 25{" "}
+                    {new Date().toLocaleString("default", { month: "short" })}
+                  </p>
+                )}
               </div>
               <div className="bg-orange-100 p-2 rounded-lg text-orange-600">
                 <FaMoneyBillWave className="text-xl" />
               </div>
             </div>
-            <div className="mt-4">
-              <div className="flex justify-between text-xs text-gray-500 mb-1">
-                <span>Progress Pelunasan</span>
-                <span>58%</span>
+            {activeLoan ? (
+              <div className="mt-4">
+                <div className="flex justify-between text-xs text-gray-500 mb-1">
+                  <span>Progress Pelunasan</span>
+                  <span>
+                    {Math.round(
+                      ((activeLoan.total_payment -
+                        activeLoan.remaining_amount) /
+                        activeLoan.total_payment) *
+                        100
+                    )}
+                    %
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                  <div
+                    className="bg-orange-500 h-2.5 rounded-full"
+                    style={{
+                      width: `${Math.round(
+                        ((activeLoan.total_payment -
+                          activeLoan.remaining_amount) /
+                          activeLoan.total_payment) *
+                          100
+                      )}%`,
+                    }}
+                  ></div>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">
+                  Cicilan {formatCurrency(activeLoan.monthly_payment)} / bulan
+                </p>
+                <button className="mt-4 w-full border border-gray-300 text-gray-700 py-1.5 rounded text-sm hover:bg-gray-50">
+                  Lihat Detail
+                </button>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div
-                  className="bg-orange-500 h-2.5 rounded-full"
-                  style={{ width: "58%" }}
-                ></div>
+            ) : (
+              <div className="mt-4 text-sm text-gray-500">
+                Anda tidak memiliki pinjaman aktif saat ini.
               </div>
-              <p className="text-xs text-gray-400 mt-2">
-                Angsuran ke-7 dari 12 bulan
-              </p>
-              <button className="mt-4 w-full border border-gray-300 text-gray-700 py-1.5 rounded text-sm hover:bg-gray-50">
-                Lihat Detail
-              </button>
-            </div>
+            )}
           </div>
 
           {/* Card SHU / Info */}
@@ -135,11 +240,9 @@ export default function DashboardPage() {
                 <p className="text-gray-500 text-sm font-medium">
                   Estimasi SHU Tahun Ini
                 </p>
-                <h2 className="text-2xl font-bold text-gray-900 mt-1">
-                  Rp 850.000
-                </h2>
-                <p className="text-xs text-green-600 mt-1 font-semibold flex items-center gap-1">
-                  <FaArrowUp /> Naik 5% dari tahun lalu
+                <h2 className="text-2xl font-bold text-gray-900 mt-1">Rp 0</h2>
+                <p className="text-xs text-gray-400 mt-1 font-semibold flex items-center gap-1">
+                  Belum tersedia
                 </p>
               </div>
               <div className="bg-green-100 p-2 rounded-lg text-green-600">
@@ -152,8 +255,7 @@ export default function DashboardPage() {
               </p>
               <div className="flex items-start gap-2 text-xs text-gray-500 bg-gray-50 p-2 rounded">
                 <FaBell className="text-blue-500 mt-0.5" />
-                Rapat Anggota Tahunan (RAT) akan dilaksanakan pada tanggal 15
-                Januari 2025.
+                Selamat datang di sistem baru KSP Sejahtera!
               </div>
             </div>
           </div>
@@ -170,7 +272,15 @@ export default function DashboardPage() {
               Lihat Semua
             </Link>
           </div>
-          <MutationTable limit={5} />
+          {loadingData ? (
+            <div className="p-6 text-center text-gray-500">Memuat data...</div>
+          ) : transactions.length > 0 ? (
+            <MutationTable data={transactions} limit={5} />
+          ) : (
+            <div className="p-6 text-center text-gray-500">
+              Belum ada transaksi.
+            </div>
+          )}
         </div>
       </div>
     </div>
