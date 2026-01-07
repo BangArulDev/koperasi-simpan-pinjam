@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { FaHandHoldingUsd, FaBars, FaSignOutAlt } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
 import AuthModal from "./AuthModal";
@@ -11,6 +12,11 @@ export default function Navbar() {
   const { user, logout } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const pathname = usePathname();
+
+  if (pathname?.startsWith("/admin")) {
+    return null;
+  }
 
   const openAuthModal = (mode: "login" | "register") => {
     setAuthMode(mode);
@@ -47,13 +53,13 @@ export default function Navbar() {
                     Dashboard
                   </Link>
                   <Link
-                    href="#"
+                    href="/dashboard/mutasi"
                     className="text-gray-600 hover:text-blue-700 font-medium transition"
                   >
                     Mutasi
                   </Link>
                   <Link
-                    href="#"
+                    href="/dashboard/pengaturan"
                     className="text-gray-600 hover:text-blue-700 font-medium transition"
                   >
                     Pengaturan
@@ -133,14 +139,14 @@ export default function Navbar() {
                   Dashboard
                 </Link>
                 <Link
-                  href="#"
+                  href="/dashboard/mutasi"
                   className="block py-2 px-4 text-sm hover:bg-gray-100"
                   onClick={() => setIsOpen(false)}
                 >
                   Mutasi
                 </Link>
                 <Link
-                  href="#"
+                  href="/dashboard/pengaturan"
                   className="block py-2 px-4 text-sm hover:bg-gray-100"
                   onClick={() => setIsOpen(false)}
                 >

@@ -42,18 +42,30 @@ export default function AuthModal({
     }
   }, [isOpen]);
 
+  /* State for login inputs */
+  const [loginIdentifier, setLoginIdentifier] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate processing
+
     setTimeout(() => {
-      login("Budi Santoso", "budi@example.com"); // Mock data to match index.html example
-      setIsLoading(false);
-      onClose();
-      router.push("/dashboard");
+      // Mock Admin Login Logic
+      if (loginIdentifier === "admin" || loginIdentifier === "admin@ksp.com") {
+        login("Admin", "admin@ksp.com", "admin");
+        setIsLoading(false);
+        onClose();
+        router.push("/admin/dashboard");
+      } else {
+        // Normal User Login
+        login("Budi Santoso", "budi@example.com", "user");
+        setIsLoading(false);
+        onClose();
+        router.push("/dashboard");
+      }
     }, 1000);
   };
-
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
     alert("Pendaftaran berhasil! Silakan login.");
@@ -138,9 +150,10 @@ export default function AuthModal({
                   Nomor Anggota / Email
                 </label>
                 <input
-                  type="text"
+                  value={loginIdentifier}
+                  onChange={(e) => setLoginIdentifier(e.target.value)}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Contoh: KSP-2024-0012"
+                  placeholder="Contoh: KSP-2024-0012 atau admin"
                   required
                 />
               </div>
@@ -149,7 +162,8 @@ export default function AuthModal({
                   Password
                 </label>
                 <input
-                  type="password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="••••••••"
                   required

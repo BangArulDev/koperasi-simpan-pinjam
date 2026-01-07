@@ -5,19 +5,22 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 interface User {
   name: string;
   email: string;
+  role: "user" | "admin";
 }
 
 interface AuthContextType {
   user: User | null;
-  login: (name: string, email: string) => void;
+  login: (name: string, email: string, role?: "user" | "admin") => void;
   logout: () => void;
   isAuthenticated: boolean;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Check for persisted user on mount
   useEffect(() => {
@@ -25,10 +28,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (storedUser) {
       setUser(JSON.parse(storedUser));
     }
+    setIsLoading(false);
   }, []);
 
-  const login = (name: string, email: string) => {
-    const newUser = { name, email };
+  const login = (
+    name: string,
+    email: string,
+    role: "user" | "admin" = "user"
+  ) => {
+    const newUser = { name, email, role };
     setUser(newUser);
     localStorage.setItem("ksp_user", JSON.stringify(newUser));
   };
@@ -40,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, login, logout, isAuthenticated: !!user }}
+      value={{ user, login, logout, isAuthenticated: !!user, isLoading }}
     >
       {children}
     </AuthContext.Provider>
