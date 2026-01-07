@@ -1,9 +1,4 @@
-import {
-  FaPiggyBank,
-  FaMoneyBillWave,
-  FaGraduationCap,
-  FaCheck,
-} from "react-icons/fa";
+import { FaPiggyBank, FaMoneyBillWave, FaGraduationCap } from "react-icons/fa";
 
 export default function Services() {
   return (
@@ -35,14 +30,6 @@ export default function Services() {
               Simpanan yang dapat disetor dan diambil kapan saja dengan jasa
               simpanan yang menarik.
             </p>
-            <ul className="text-sm text-gray-500 space-y-2">
-              <li className="flex items-center">
-                <FaCheck className="text-green-500 mr-2" /> Bebas biaya admin
-              </li>
-              <li className="flex items-center">
-                <FaCheck className="text-green-500 mr-2" /> Bunga harian
-              </li>
-            </ul>
           </div>
 
           {/* Service 2 */}
@@ -57,15 +44,6 @@ export default function Services() {
               Modal kerja untuk pengembangan UMKM anggota dengan syarat mudah
               dan proses cepat.
             </p>
-            <ul className="text-sm text-gray-500 space-y-2">
-              <li className="flex items-center">
-                <FaCheck className="text-green-500 mr-2" /> Plafon hingga 50
-                Juta
-              </li>
-              <li className="flex items-center">
-                <FaCheck className="text-green-500 mr-2" /> Tenor s.d 36 Bulan
-              </li>
-            </ul>
           </div>
 
           {/* Service 3 */}
@@ -80,15 +58,6 @@ export default function Services() {
               Persiapkan masa depan buah hati Anda dengan tabungan berjangka
               khusus pendidikan.
             </p>
-            <ul className="text-sm text-gray-500 space-y-2">
-              <li className="flex items-center">
-                <FaCheck className="text-green-500 mr-2" /> Bunga diatas
-                rata-rata
-              </li>
-              <li className="flex items-center">
-                <FaCheck className="text-green-500 mr-2" /> Auto-debet bulanan
-              </li>
-            </ul>
           </div>
         </div>
       </div>

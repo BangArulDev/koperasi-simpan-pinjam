@@ -9,7 +9,7 @@ export default function Contact() {
   };
 
   return (
-    <section id="daftar" className="py-20 bg-white">
+    <section id="kontak" className="py-20 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="lg:grid lg:grid-cols-2 lg:gap-8">
           <div>
@@ -23,7 +23,7 @@ export default function Contact() {
 
             <div className="mt-8 space-y-4">
               <div className="flex items-start">
-                <div className="flex-shrink-0">
+                <div className="shrink-0">
                   <div className="flex items-center justify-center h-10 w-10 rounded-md bg-blue-600 text-white">
                     <FaMapMarkerAlt />
                   </div>
@@ -40,7 +40,7 @@ export default function Contact() {
                 </div>
               </div>
               <div className="flex items-start">
-                <div className="flex-shrink-0">
+                <div className="shrink-0">
                   <div className="flex items-center justify-center h-10 w-10 rounded-md bg-blue-600 text-white">
                     <FaPhone />
                   </div>
